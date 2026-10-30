@@ -60,7 +60,19 @@ python -m piper.download_voices --download-dir voices en_US-lessac-medium en_GB-
 
 ## Usage
 
-*Planned. Commands are not implemented yet.*
+Available now (Phase 1):
+
+```bash
+python -m app list-stations
+python -m app make-episode --station 88.1          # one real episode (needs Ollama and voices)
+python -m app make-episode --fake --station 88.1   # canned story and tone speech, no models
+python -m app make-episode --all -v                # one episode per station, with logs
+python -m unittest discover -v                     # tests (no models needed)
+```
+
+Episodes are written to `cache/episodes/` as a `.wav` plus a `.json` file with the text and caption timings.
+
+*Planned (not implemented yet):*
 
 ```bash
 midnight-stranger serve            # start the radio at http://127.0.0.1:8137
@@ -71,7 +83,7 @@ midnight-stranger install-service  # run in the background (systemd user service
 ## Project layout
 
 ```
-app/        generator, TTS, ambience, mixer, queue worker, API
+app/        stations, generator, TTS, ambience, mixer, pipeline, CLI (queue worker and API planned)
 static/     the radio dial page (no external requests)
 scripts/    pregenerate.py for demo episodes
 tests/      fake-mode tests (no models needed)
@@ -84,7 +96,7 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phased checklist.
 | Feature | Status |
 |---|---|
 | Environment and dependencies | Done |
-| Story generation, TTS, mixer | Planned |
+| Story generation, TTS, mixer, CLI | Code written and fake-mode tested; real-hardware run pending |
 | API, queue, cache | Planned |
 | Radio dial UI | Planned |
 | Background service (systemd user unit) | Planned |
@@ -107,3 +119,4 @@ All code in this repository was started during the Hacktoberfest Week 4 challeng
 |---|---|
 | 2026-10-28 | Project created. Dependencies installed (`gemma3:4b`, Piper, FastAPI). README and implementation plan added. |
 | 2026-10-28 | Added `app/config.py`, `.gitignore` and `scripts/phase0_check.py` (environment smoke test). Install step now downloads voices straight into `voices/`. |
+| 2026-10-29 | Phase 1 code: stations, story generator (JSON schema, validation, retries, fallback model, content guard), Piper TTS wrapper, numpy ambience, mixer with ducking and caption timings, `make-episode` CLI, 16 tests. |

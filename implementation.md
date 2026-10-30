@@ -28,10 +28,10 @@ midnight-stranger/
   app/
     __init__.py  __main__.py  config.py  stations.py
     generator.py  tts.py  ambience.py  mixer.py
-    store.py  worker.py  main.py  cli.py
+    pipeline.py  store.py  worker.py  main.py  cli.py
   static/  index.html  app.js  style.css
-  scripts/  pregenerate.py
-  tests/
+  scripts/  phase0_check.py  pregenerate.py
+  tests/  test_phase1.py
   voices/   (gitignored)    cache/ (gitignored)
   README.md  IMPLEMENTATION_PLAN.md  LICENSE  requirements.txt  .gitignore
 ```
@@ -44,20 +44,39 @@ midnight-stranger/
 - [x] Repo initialised, venv created, dependencies installed, `requirements.txt` frozen
 - [x] Three Piper voices downloaded
 - [x] `ollama list` shows `gemma3:4b` (confirmed, 3.4 GB)
-- [ ] One prompt returns text (`python scripts/phase0_check.py`)
+- [x] One prompt returns text (`python scripts/phase0_check.py`)
 - [x] Voice files found in the project root (alan, amy, lessac)
-- [ ] Move voices into `voices/`: `mkdir -p voices && mv en_*.onnx* voices/`
-- [ ] Synthesize a sample per voice to .wav and listen to it (`scripts/phase0_check.py` does this)
-- [ ] Add `.gitignore` (delivered; copy into the repo root)
-- [ ] Add `app/__init__.py` (empty) and `app/config.py` (delivered; Phase 1 config item done once copied in)
-- [ ] Add `LICENSE` (GPL-3.0-or-later) and make the first commit
-- [ ] Record baseline numbers for the write-up. Known: Python 3.12.0, 2 CPU cores, 11 GiB RAM, 38 GB free disk. Still to measure: `gemma3:4b` tokens/sec, speech synthesis speed (the script prints a BASELINE block)
+- [x] Move voices into `voices/`
+- [x] Synthesize a sample per voice to .wav and listen to it (confirmed)
+- [x] Add `.gitignore`
+- [x] Add `app/__init__.py` and `app/config.py`
+- [ ] Add `LICENSE` (GPL-3.0-or-later): `curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt -o LICENSE`, then make the first commit
+- [x] Record baseline numbers for the write-up (see Baseline measurements below)
 
 **Gate:** one hard-coded paragraph goes text, then Piper, then a playable .wav.
 
-## Phase 1: Core pipeline (Thursday, ~4 h)
+## Baseline measurements (Oct 29, Linux box over SSH)
 
-- [ ] `config.py`: paths (voices, cache), model name, port 8137, queue target, all overridable by env vars
+| Item | Value |
+|---|---|
+| Python | 3.12.0 |
+| CPU cores | 2 |
+| RAM total / available | 11.7 GiB / 8.2 GiB |
+| Disk free | 40.7 GB |
+| `gemma3:4b` generation | 9.2 tokens/sec |
+| `gemma3:4b` model load | 21.4 s (first call) |
+| Piper `en_GB-alan-medium` | 19.2 s audio in 1.5 s (12.5x realtime) |
+| Piper `en_US-amy-medium` | 18.8 s audio in 1.4 s (13.2x realtime) |
+| Piper `en_US-lessac-medium` | 16.1 s audio in 1.3 s (12.9x realtime) |
+| Estimated episode time | about 1.5 min (story about 55 s, speech about 12 s, mix about 2 s) |
+
+These are measured on a short 67-token reply; confirm against a real story in the Phase 1 checks.
+
+## Phase 1: Core pipeline (started Wed night, ~4 h)
+
+> Status: all Phase 1 code is written and passes 16 fake-mode tests. It has not yet run against real Ollama and Piper. Code boxes below stay unticked until you have run them on your machine; see **Your checks** at the end of this phase.
+
+- [x] `config.py`: paths (voices, cache), model name, port 8137, queue target, all overridable by env vars
 - [ ] `stations.py`: four stations (frequency, name, persona prompt, voice, ambience profile)
   - [ ] 88.1 The Lighthouse
   - [ ] 93.7 Route 13 Overnight
@@ -65,14 +84,22 @@ midnight-stranger/
   - [ ] 107.9 Static Hours
 - [ ] `generator.py`
   - [ ] Ollama call with JSON schema (`title`, `paragraphs[]`)
-  - [ ] Validate: 3 to 6 paragraphs, 250 to 350 words total
+  - [ ] Validate: ask for 4 to 6 paragraphs and about 300 words; accept 3 to 8 paragraphs and 200 to 455 words (80% of min to 130% of max, because retries cost minutes on CPU)
   - [ ] Retry up to 3 times, then fall back to `gemma3:1b`
   - [ ] Content guard: fictional, PG-13, reject and regenerate on banned terms
 - [ ] `tts.py`: load each voice once, synthesize per paragraph, return samples and duration
 - [ ] `ambience.py`: loopable numpy beds (rumble, drone, crackle, hiss), one profile per station
 - [ ] `mixer.py`: static burst intro, paragraphs with pauses, ambience ducked under speech, normalize, write .wav, record per-paragraph start/end times
-- [ ] `cli.py`: `python -m app make-episode --station 88.1` writes audio plus metadata JSON
+- [ ] `pipeline.py` and `cli.py`: `python -m app make-episode --station 88.1` writes audio plus metadata JSON
 - [ ] Fake mode (`MS_FAKE=1`): canned story and sine-tone TTS so tests need no models
+
+**Your checks (on your machine):**
+
+- [ ] `python -m unittest discover -v` passes
+- [ ] `python -m app make-episode --fake --station 88.1` plays (tone "speech" over ambience)
+- [ ] Real episode: `python -m app make-episode --station 88.1 -v`; note the story generation time
+- [ ] Listen to all four ambience beds; adjust `bed_level` in `stations.py` and `DUCK_DEPTH` in `mixer.py` if needed
+- [ ] All four stations produce a real episode; at least 3 of 5 stories read acceptably
 
 **Gate:** `make-episode` produces a finished episode for all four stations; at least 3 of 5 stories read acceptably.
 
@@ -129,8 +156,8 @@ midnight-stranger/
 
 ## Phase 6: Tests (alongside, ~1 h)
 
-- [ ] Generator validation tests (bad JSON, wrong length, banned terms)
-- [ ] Mixer test: output length equals sum of parts, no clipping
+- [x] Generator validation tests (bad JSON, wrong length, banned terms, retries, fallback) in `tests/test_phase1.py`
+- [x] Mixer test: duration matches segments, normalised, no clipping
 - [ ] API tests in fake mode
 - [ ] Stretch: GitHub Actions on ubuntu-latest running the fake-mode suite
 
@@ -172,6 +199,7 @@ midnight-stranger/
 | Disk fills with audio | Cache cap and cleanup |
 | Dark or gory output | PG-13 system prompt plus content guard |
 | Licensing | Repo GPL-3.0-or-later; credit Gemma terms and each voice's license in README |
+| Ambience beds not auditioned by the author of the code | Tune `bed_level` per station and `DUCK_DEPTH` after listening |
 
 ## Decision log
 
@@ -181,6 +209,10 @@ midnight-stranger/
 | Oct 28 | Develop on Linux over SSH; Windows/WSL deferred to stretch |
 | Oct 28 | Model: `gemma3:4b` (installed); fallback `gemma3:1b` |
 | Oct 28 | License: GPL-3.0-or-later because of Piper |
+| Oct 29 | Voices: Lighthouse = alan, Route 13 = lessac, Dead = amy, Static Hours = lessac (slower, flatter) |
+| Oct 29 | Episodes open with a spoken station intro and title; each segment gets caption timings |
+| Oct 29 | Story length tolerance (200 to 455 words) instead of a strict 250 to 350 |
+| Oct 29 | Keep `gemma3:4b` as the main model: 9.2 tokens/sec measured, about 1.5 min per episode |
 
 ## Progress log
 
@@ -188,3 +220,6 @@ midnight-stranger/
 |---|---|
 | Oct 28 | Environment installed; plan and README created |
 | Oct 28 | Phase 0: model and voices confirmed; `config.py`, `.gitignore`, `scripts/phase0_check.py` written (not yet run against real Ollama/voices) |
+| Oct 28 | Phase 0 complete (model and voices confirmed, samples listened to); LICENSE still to add |
+| Oct 29 | Phase 1 code written (stations, generator, TTS, ambience, mixer, pipeline, CLI) plus 16 fake-mode tests; awaiting first real run |
+| Oct 29 | Baseline recorded: `gemma3:4b` 9.2 tokens/sec, Piper about 13x realtime |
