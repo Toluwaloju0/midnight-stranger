@@ -191,6 +191,7 @@ def _chat(model: str, messages: list[dict]) -> str:
         messages=messages,
         format=SCHEMA,
         options={"temperature": 0.9, "top_p": 0.95, "num_predict": 900},
+        keep_alive=config.KEEP_ALIVE,
     )
     return response.message.content or ""
 

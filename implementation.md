@@ -3,7 +3,7 @@
 An offline horror radio: local LLM writes the stories, local TTS reads them, numpy builds the ambience, a browser "dial" tunes between stations.
 
 **Challenge:** Hacktoberfest Open-Source AI Challenge, Week 4 "Ghost in the Machine"
-**Deadline:** Sunday Nov 1, 07:59 AM Lagos (Oct 31, 11:59 PM PDT). Target: publish Saturday evening.
+**Deadline:** Sunday Nov 1, 07:59 AM Lagos (Oct 31, 11:59 PM PDT). Target: publish Saturday about 21:00 (see Revised schedule).
 **Environment:** Linux over SSH (VS Code). Windows/WSL support is a stretch layer.
 
 Tick a box when its gate is met (`- [x]`). Every phase ends with a **Gate**: do not start the next phase until it passes.
@@ -31,10 +31,25 @@ midnight-stranger/
     pipeline.py  store.py  worker.py  main.py  cli.py
   static/  index.html  app.js  style.css
   scripts/  phase0_check.py  pregenerate.py
-  tests/  test_phase1.py
+  tests/  test_phase1.py  test_phase2.py
   voices/   (gitignored)    cache/ (gitignored)
   README.md  IMPLEMENTATION_PLAN.md  LICENSE  requirements.txt  .gitignore
 ```
+
+---
+
+## Revised schedule (reset Fri Oct 30, 23:00; deadline Sun Nov 1, 07:59 Lagos)
+
+The original plan froze features on Friday night. Phases 1 and 2 finished later than planned, so the remaining work is compressed:
+
+| When | Work |
+|---|---|
+| Fri night | Phase 2: queue, cache, API (code ready; run your checks) |
+| Sat 08:00 to 12:00 | Phase 3: radio dial page |
+| Sat 12:00 to 15:00 | Phase 4: pre-generate demo episodes (runs in the background while you test), curate, airplane-mode test, record demo. **Feature freeze about 14:00** |
+| Sat 15:00 to 21:00 | Phase 7: README final and the DEV post |
+| Sat about 21:00 | Publish. Sunday 07:59 is the hard deadline, not the plan |
+| After publishing, only if time remains | Phase 5 packaging (see note there) |
 
 ---
 
@@ -74,36 +89,38 @@ These are measured on a short 67-token reply; confirm against a real story in th
 
 ## Phase 1: Core pipeline (started Wed night, ~4 h)
 
-> Status: all Phase 1 code is written and passes 16 fake-mode tests. It has not yet run against real Ollama and Piper. Code boxes below stay unticked until you have run them on your machine; see **Your checks** at the end of this phase.
+> Status: working (confirmed by the author, Oct 30). The ambience and story-quality checks below are still open.
 
 - [x] `config.py`: paths (voices, cache), model name, port 8137, queue target, all overridable by env vars
-- [ ] `stations.py`: four stations (frequency, name, persona prompt, voice, ambience profile)
-  - [ ] 88.1 The Lighthouse
-  - [ ] 93.7 Route 13 Overnight
-  - [ ] 101.3 Frequency of the Dead (gentle, fictional remembrance)
-  - [ ] 107.9 Static Hours
-- [ ] `generator.py`
-  - [ ] Ollama call with JSON schema (`title`, `paragraphs[]`)
-  - [ ] Validate: ask for 4 to 6 paragraphs and about 300 words; accept 3 to 8 paragraphs and 200 to 455 words (80% of min to 130% of max, because retries cost minutes on CPU)
-  - [ ] Retry up to 3 times, then fall back to `gemma3:1b`
-  - [ ] Content guard: fictional, PG-13, reject and regenerate on banned terms
-- [ ] `tts.py`: load each voice once, synthesize per paragraph, return samples and duration
-- [ ] `ambience.py`: loopable numpy beds (rumble, drone, crackle, hiss), one profile per station
-- [ ] `mixer.py`: static burst intro, paragraphs with pauses, ambience ducked under speech, normalize, write .wav, record per-paragraph start/end times
-- [ ] `pipeline.py` and `cli.py`: `python -m app make-episode --station 88.1` writes audio plus metadata JSON
-- [ ] Fake mode (`MS_FAKE=1`): canned story and sine-tone TTS so tests need no models
+- [x] `stations.py`: four stations (frequency, name, persona prompt, voice, ambience profile)
+  - [x] 88.1 The Lighthouse
+  - [x] 93.7 Route 13 Overnight
+  - [x] 101.3 Frequency of the Dead (gentle, fictional remembrance)
+  - [x] 107.9 Static Hours
+- [x] `generator.py`
+  - [x] Ollama call with JSON schema (`title`, `paragraphs[]`)
+  - [x] Validate: ask for 4 to 6 paragraphs and about 300 words; accept 3 to 8 paragraphs and 200 to 455 words (80% of min to 130% of max, because retries cost minutes on CPU)
+  - [x] Retry up to 3 times, then fall back to `gemma3:1b`
+  - [x] Content guard: fictional, PG-13, reject and regenerate on banned terms
+- [x] `tts.py`: load each voice once, synthesize per paragraph, return samples and duration
+- [x] `ambience.py`: loopable numpy beds (rumble, drone, crackle, hiss), one profile per station
+- [x] `mixer.py`: static burst intro, paragraphs with pauses, ambience ducked under speech, normalize, write .wav, record per-paragraph start/end times
+- [x] `pipeline.py` and `cli.py`: `python -m app make-episode --station 88.1` writes audio plus metadata JSON
+- [x] Fake mode (`MS_FAKE=1`): canned story and sine-tone TTS so tests need no models
 
 **Your checks (on your machine):**
 
-- [ ] `python -m unittest discover -v` passes
-- [ ] `python -m app make-episode --fake --station 88.1` plays (tone "speech" over ambience)
-- [ ] Real episode: `python -m app make-episode --station 88.1 -v`; note the story generation time
+- [x] `python -m unittest discover -v` passes
+- [x] `python -m app make-episode --fake --station 88.1` plays (tone "speech" over ambience)
+- [x] Real episode: `python -m app make-episode --station 88.1 -v`; note the story generation time
 - [ ] Listen to all four ambience beds; adjust `bed_level` in `stations.py` and `DUCK_DEPTH` in `mixer.py` if needed
 - [ ] All four stations produce a real episode; at least 3 of 5 stories read acceptably
 
 **Gate:** `make-episode` produces a finished episode for all four stations; at least 3 of 5 stories read acceptably.
 
-## Phase 2: Service, queue and cache (Thursday, ~2 h)
+## Phase 2: Service, queue and cache (Friday night, ~2 h)
+
+> Status: code written. 22 new tests (38 in total) pass and the live server was exercised over HTTP in fake mode. Boxes stay unticked until you have run it against real Ollama and Piper.
 
 - [ ] `store.py`: episode folder layout, metadata JSON (id, station, title, text, timings, created, played)
 - [ ] `worker.py`: background thread keeps N unplayed episodes per station; one generation at a time; `os.nice` low priority
@@ -117,9 +134,17 @@ These are measured on a short 67-token reply; confirm against a real story in th
 - [ ] Cache cap (default 300 MB), delete oldest played episodes first
 - [ ] Graceful failure: if Ollama is down, serve cached episodes and return a clear status
 
+**Your checks (on your machine):**
+
+- [ ] `pip install httpx` (only the API tests need it), then `python -m unittest discover -v` shows 38 tests passing
+- [ ] `python -m app serve --fake`, then open `/api/stations` and `/api/status` (VS Code forwards port 8137)
+- [ ] `python -m app serve` (real): watch `/api/status` while the worker fills the queue; the first real episode appears
+- [ ] Download one episode and play it: `curl -o t.wav http://localhost:8137/audio/<id>.wav`
+- [ ] Stop Ollama (`sudo systemctl stop ollama`): `/api/health` reports it unreachable, `next` still serves cached episodes, `/api/status` shows the error. Start Ollama again and generation resumes
+
 **Gate:** `curl` the API: `next` returns an episode, the audio plays, and the queue refills in the background.
 
-## Phase 3: Frontend (Thursday night to Friday, ~3 h)
+## Phase 3: Frontend (Saturday morning, ~3 h)
 
 - [ ] Dial UI that snaps between the four stations
 - [ ] WebAudio static burst on tune, no audio files needed
@@ -130,7 +155,7 @@ These are measured on a short 67-token reply; confirm against a real story in th
 
 **Gate:** open the page, tune stations, hear a full episode with captions.
 
-## Phase 4: Demo content and measurements (Friday, ~2 h)
+## Phase 4: Demo content and measurements (Saturday midday, ~2 h)
 
 - [ ] `scripts/pregenerate.py`: build 3 to 4 episodes per station
 - [ ] Curate: read every demo story, regenerate weak ones, keep a bad example and its fix for the post
@@ -140,7 +165,9 @@ These are measured on a short 67-token reply; confirm against a real story in th
 
 **Gate:** a stranger could watch the demo and understand it in 60 seconds.
 
-## Phase 5: Packaging and background service (Friday, ~3 h)
+## Phase 5: Packaging and background service (optional, after publishing)
+
+> Proposed cut: the submission needs a working, documented project, not an installer. If time remains after the post is published, do `doctor` and the systemd user unit first. Until then, the README documents manual start (`python -m app serve`) and a copy-paste systemd unit.
 
 - [ ] `pyproject.toml` with a `midnight-stranger` entry point
 - [ ] `cli.py` commands: `serve`, `status`, `doctor`, `open`
@@ -161,9 +188,9 @@ These are measured on a short 67-token reply; confirm against a real story in th
 - [ ] API tests in fake mode
 - [ ] Stretch: GitHub Actions on ubuntu-latest running the fake-mode suite
 
-## Phase 7: Submission (Friday night to Saturday)
+## Phase 7: Submission (Saturday afternoon and evening)
 
-- [ ] **Feature freeze Friday night.** Later commits go in the README note.
+- [ ] **Feature freeze Saturday about 14:00.** Later commits go in the README note.
 - [ ] README final: install, usage, screenshots, honest limits
 - [ ] Verify the repo is public and `LICENSE` is present
 - [ ] Draft the DEV post using the Week 4 template (tags: `devchallenge`, `hf26challenge`):
@@ -213,6 +240,9 @@ These are measured on a short 67-token reply; confirm against a real story in th
 | Oct 29 | Episodes open with a spoken station intro and title; each segment gets caption timings |
 | Oct 29 | Story length tolerance (200 to 455 words) instead of a strict 250 to 350 |
 | Oct 29 | Keep `gemma3:4b` as the main model: 9.2 tokens/sec measured, about 1.5 min per episode |
+| Oct 30 | Schedule reset (see Revised schedule). Phase 5 packaging becomes optional |
+| Oct 30 | Worker keeps the model loaded (`keep_alive` 30m), runs one generation at a time at low priority, and refills the station being listened to first |
+| Oct 30 | `next` marks an episode played when served; when all are played it replays the least recently played one |
 
 ## Progress log
 
@@ -223,3 +253,5 @@ These are measured on a short 67-token reply; confirm against a real story in th
 | Oct 28 | Phase 0 complete (model and voices confirmed, samples listened to); LICENSE still to add |
 | Oct 29 | Phase 1 code written (stations, generator, TTS, ambience, mixer, pipeline, CLI) plus 16 fake-mode tests; awaiting first real run |
 | Oct 29 | Baseline recorded: `gemma3:4b` 9.2 tokens/sec, Piper about 13x realtime |
+| Oct 30 | Phase 1 confirmed working by the author |
+| Oct 30 | Phase 2 code written (store, worker, API, `serve` command) with 22 new tests; live server exercised over HTTP in fake mode; awaiting real-hardware run |

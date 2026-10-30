@@ -42,5 +42,9 @@ CACHE_CAP_MB = _int("MS_CACHE_CAP_MB", 300)    # delete oldest played episodes a
 MIN_WORDS = _int("MS_MIN_WORDS", 250)
 MAX_WORDS = _int("MS_MAX_WORDS", 350)
 
+# Background worker
+WORKER = os.environ.get("MS_NO_WORKER") != "1"
+KEEP_ALIVE = os.environ.get("MS_KEEP_ALIVE", "30m")   # keep the model loaded between stories
+
 # Fake mode: canned story + sine-tone TTS, so tests need no models
 FAKE = os.environ.get("MS_FAKE") == "1"

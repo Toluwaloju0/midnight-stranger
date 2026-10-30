@@ -60,14 +60,17 @@ python -m piper.download_voices --download-dir voices en_US-lessac-medium en_GB-
 
 ## Usage
 
-Available now (Phase 1):
+Available now (Phases 1 and 2):
 
 ```bash
 python -m app list-stations
 python -m app make-episode --station 88.1          # one real episode (needs Ollama and voices)
 python -m app make-episode --fake --station 88.1   # canned story and tone speech, no models
 python -m app make-episode --all -v                # one episode per station, with logs
-python -m unittest discover -v                     # tests (no models needed)
+python -m app serve                                # the radio service on http://127.0.0.1:8137
+python -m app serve --fake                         # same, with canned stories (no models)
+python -m app serve --no-worker                    # serve cached episodes only, generate nothing
+python -m unittest discover -v                     # tests (no models needed; API tests need httpx)
 ```
 
 Episodes are written to `cache/episodes/` as a `.wav` plus a `.json` file with the text and caption timings.
@@ -75,15 +78,29 @@ Episodes are written to `cache/episodes/` as a `.wav` plus a `.json` file with t
 *Planned (not implemented yet):*
 
 ```bash
-midnight-stranger serve            # start the radio at http://127.0.0.1:8137
 midnight-stranger doctor           # check Ollama, model, voices, disk
 midnight-stranger install-service  # run in the background (systemd user service)
 ```
 
+## API
+
+`python -m app serve` starts a local-only service (use `--lan` to share on your network; there is no password). A background worker keeps two unplayed episodes ready per station, one generation at a time at low priority, and refills the station you are listening to first. Interactive docs are at `/docs`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | Is Ollama reachable, is the model installed, are voices present |
+| `GET /api/stations` | The four stations with queue depth |
+| `GET /api/stations/{freq}/next` | Next episode (title, caption timings, audio URL). Replays an old one if nothing new is ready; 503 with a hint if the station has no episodes yet |
+| `GET /audio/{id}.wav` | The audio (supports range requests for seeking) |
+| `GET /api/status` | Worker state, last error, cache size |
+| `POST /api/pause`, `POST /api/resume` | Stop or restart new generation (a running one finishes) |
+
+If Ollama stops, the service keeps playing cached episodes, reports the error in `/api/status`, and retries with a growing delay. The cache is capped at 300 MB (`MS_CACHE_CAP_MB`); only the oldest played episodes are deleted.
+
 ## Project layout
 
 ```
-app/        stations, generator, TTS, ambience, mixer, pipeline, CLI (queue worker and API planned)
+app/        stations, generator, TTS, ambience, mixer, pipeline, store, worker, API, CLI
 static/     the radio dial page (no external requests)
 scripts/    pregenerate.py for demo episodes
 tests/      fake-mode tests (no models needed)
@@ -97,7 +114,7 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phased checklist.
 |---|---|
 | Environment and dependencies | Done |
 | Story generation, TTS, mixer, CLI | Code written and fake-mode tested; real-hardware run pending |
-| API, queue, cache | Planned |
+| API, queue, cache | Code written and tested in fake mode; real-hardware run pending |
 | Radio dial UI | Planned |
 | Background service (systemd user unit) | Planned |
 | Windows autostart | Stretch |
@@ -120,3 +137,4 @@ All code in this repository was started during the Hacktoberfest Week 4 challeng
 | 2026-10-28 | Project created. Dependencies installed (`gemma3:4b`, Piper, FastAPI). README and implementation plan added. |
 | 2026-10-28 | Added `app/config.py`, `.gitignore` and `scripts/phase0_check.py` (environment smoke test). Install step now downloads voices straight into `voices/`. |
 | 2026-10-29 | Phase 1 code: stations, story generator (JSON schema, validation, retries, fallback model, content guard), Piper TTS wrapper, numpy ambience, mixer with ducking and caption timings, `make-episode` CLI, 16 tests. |
+| 2026-10-30 | Phase 2 code: episode store with cache cap, background queue worker, FastAPI service (`serve` command), 22 more tests. |

@@ -1,7 +1,6 @@
 """One call that turns a station into a finished episode on disk."""
 from __future__ import annotations
 
-import json
 import random
 import secrets
 import time
@@ -12,10 +11,7 @@ from . import config
 from .generator import generate_story
 from .mixer import render_episode, write_wav
 from .stations import Station
-
-
-def episodes_dir() -> Path:
-    return Path(config.CACHE_DIR) / "episodes"
+from .store import episodes_dir, write_json_atomic
 
 
 def make_episode(station: Station, *, out_dir: Path | None = None, model: str | None = None,
@@ -54,5 +50,5 @@ def make_episode(station: Station, *, out_dir: Path | None = None, model: str | 
             "total": round(time.perf_counter() - started, 2),
         },
     }
-    (out / f"{episode_id}.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    write_json_atomic(out / f"{episode_id}.json", meta)   # written last, atomically
     return meta

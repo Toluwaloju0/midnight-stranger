@@ -55,6 +55,27 @@ def cmd_make(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    if args.fake:
+        config.FAKE = True
+    if args.no_worker:
+        config.WORKER = False
+    host = "0.0.0.0" if args.lan else (args.host or config.HOST)
+    port = args.port or config.PORT
+    if args.lan:
+        print("WARNING: --lan makes the radio reachable by every device on your network. "
+              "There is no password. Use it only on a network you trust.", file=sys.stderr)
+    from .main import create_app
+
+    shown = "localhost" if host in ("127.0.0.1", "0.0.0.0") else host
+    print(f"Midnight Stranger is starting at http://{shown}:{port}"
+          f"{' (fake mode)' if config.FAKE else ''}  (Ctrl+C to stop)", flush=True)
+    uvicorn.run(create_app(), host=host, port=port, log_level="warning" if not args.verbose else "info")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app", description="Midnight Stranger")
     parser.add_argument("-v", "--verbose", action="store_true", help="show generator logs")
@@ -71,6 +92,14 @@ def main(argv: list[str] | None = None) -> int:
     make.add_argument("--out", help="output folder (default cache/episodes)")
     make.add_argument("--seed", type=int, help="seed for repeatable prompts and ambience")
     make.set_defaults(func=cmd_make)
+
+    serve = sub.add_parser("serve", help="run the radio service")
+    serve.add_argument("--host", help=f"bind address (default {config.HOST}, local only)")
+    serve.add_argument("--port", type=int, help=f"port (default {config.PORT})")
+    serve.add_argument("--lan", action="store_true", help="listen on all network interfaces (no password!)")
+    serve.add_argument("--fake", action="store_true", help="canned stories and tone speech, no models")
+    serve.add_argument("--no-worker", action="store_true", help="do not generate new episodes in the background")
+    serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
