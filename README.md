@@ -24,7 +24,7 @@ Browser dial UI -> FastAPI -> station queue -> Ollama (story JSON)
 
 A background worker keeps a few finished episodes ready per station, so tuning the dial never waits on the model.
 
-## Stations (planned)
+## Stations
 
 | Frequency | Station | Flavour |
 |---|---|---|
@@ -60,18 +60,23 @@ python -m piper.download_voices --download-dir voices en_US-lessac-medium en_GB-
 
 ## Usage
 
-Available now (Phases 1 and 2):
+Available now (Phases 1 to 3):
 
 ```bash
 python -m app list-stations
 python -m app make-episode --station 88.1          # one real episode (needs Ollama and voices)
 python -m app make-episode --fake --station 88.1   # canned story and tone speech, no models
 python -m app make-episode --all -v                # one episode per station, with logs
-python -m app serve                                # the radio service on http://127.0.0.1:8137
+python -m app serve                                # the radio: open http://127.0.0.1:8137
 python -m app serve --fake                         # same, with canned stories (no models)
 python -m app serve --no-worker                    # serve cached episodes only, generate nothing
+python scripts/pregenerate.py --per-station 4      # fill the cache with demo episodes, save timings
+python scripts/review.py                           # write all stories to cache/review.md for reading
+python scripts/offline_guard.py                    # run the radio and block/log any non-local network call
 python -m unittest discover -v                     # tests (no models needed; API tests need httpx)
 ```
+
+Open <http://127.0.0.1:8137> and click **Turn the radio on** (browsers block sound until you click). Tune by dragging the needle, pressing a station key, or with the left and right arrow keys; Space pauses. On a remote machine over SSH, forward port 8137.
 
 Episodes are written to `cache/episodes/` as a `.wav` plus a `.json` file with the text and caption timings.
 
@@ -101,8 +106,8 @@ If Ollama stops, the service keeps playing cached episodes, reports the error in
 
 ```
 app/        stations, generator, TTS, ambience, mixer, pipeline, store, worker, API, CLI
-static/     the radio dial page (no external requests)
-scripts/    pregenerate.py for demo episodes
+static/     the radio page: index.html, style.css, app.js (no external requests, no frameworks)
+scripts/    pregenerate.py (demo episodes + timings), review.py (read the stories), offline_guard.py (offline proof)
 tests/      fake-mode tests (no models needed)
 ```
 
@@ -115,7 +120,7 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phased checklist.
 | Environment and dependencies | Done |
 | Story generation, TTS, mixer, CLI | Code written and fake-mode tested; real-hardware run pending |
 | API, queue, cache | Code written and tested in fake mode; real-hardware run pending |
-| Radio dial UI | Planned |
+| Radio dial UI | Code written and browser-tested in fake mode; listening checks on real hardware pending |
 | Background service (systemd user unit) | Planned |
 | Windows autostart | Stretch |
 
@@ -138,3 +143,5 @@ All code in this repository was started during the Hacktoberfest Week 4 challeng
 | 2026-10-28 | Added `app/config.py`, `.gitignore` and `scripts/phase0_check.py` (environment smoke test). Install step now downloads voices straight into `voices/`. |
 | 2026-10-29 | Phase 1 code: stations, story generator (JSON schema, validation, retries, fallback model, content guard), Piper TTS wrapper, numpy ambience, mixer with ducking and caption timings, `make-episode` CLI, 16 tests. |
 | 2026-10-30 | Phase 2 code: episode store with cache cap, background queue worker, FastAPI service (`serve` command), 22 more tests. |
+| 2026-10-31 | Phase 3: the radio page. Glass dial that snaps between stations, preset keys with queue dots, browser-made static between stations, captions that follow the narration, auto-advance, status line, phone layout. 5 more tests. |
+| 2026-10-31 | Phase 4 tooling: `pregenerate.py` (resumable cache filler with measurements), `review.py` (story review file with flags), `offline_guard.py` (blocks and reports non-local connections). |

@@ -30,8 +30,8 @@ midnight-stranger/
     generator.py  tts.py  ambience.py  mixer.py
     pipeline.py  store.py  worker.py  main.py  cli.py
   static/  index.html  app.js  style.css
-  scripts/  phase0_check.py  pregenerate.py
-  tests/  test_phase1.py  test_phase2.py
+  scripts/  phase0_check.py  pregenerate.py  review.py  offline_guard.py
+  tests/  test_phase1.py  test_phase2.py  test_phase3.py
   voices/   (gitignored)    cache/ (gitignored)
   README.md  IMPLEMENTATION_PLAN.md  LICENSE  requirements.txt  .gitignore
 ```
@@ -44,8 +44,8 @@ The original plan froze features on Friday night. Phases 1 and 2 finished later 
 
 | When | Work |
 |---|---|
-| Fri night | Phase 2: queue, cache, API (code ready; run your checks) |
-| Sat 08:00 to 12:00 | Phase 3: radio dial page |
+| Fri night | Phase 2: queue, cache, API (confirmed working) |
+| Sat 08:00 to 12:00 | Phase 3: radio dial page (code ready; run your checks) |
 | Sat 12:00 to 15:00 | Phase 4: pre-generate demo episodes (runs in the background while you test), curate, airplane-mode test, record demo. **Feature freeze about 14:00** |
 | Sat 15:00 to 21:00 | Phase 7: README final and the DEV post |
 | Sat about 21:00 | Publish. Sunday 07:59 is the hard deadline, not the plan |
@@ -120,7 +120,7 @@ These are measured on a short 67-token reply; confirm against a real story in th
 
 ## Phase 2: Service, queue and cache (Friday night, ~2 h)
 
-> Status: code written. 22 new tests (38 in total) pass and the live server was exercised over HTTP in fake mode. Boxes stay unticked until you have run it against real Ollama and Piper.
+> Status: endpoints confirmed working by the author (Oct 30). 22 tests. Boxes stay unticked until you have run the full real-Ollama checks below.
 
 - [ ] `store.py`: episode folder layout, metadata JSON (id, station, title, text, timings, created, played)
 - [ ] `worker.py`: background thread keeps N unplayed episodes per station; one generation at a time; `os.nice` low priority
@@ -146,22 +146,47 @@ These are measured on a short 67-token reply; confirm against a real story in th
 
 ## Phase 3: Frontend (Saturday morning, ~3 h)
 
-- [ ] Dial UI that snaps between the four stations
-- [ ] WebAudio static burst on tune, no audio files needed
-- [ ] Audio player with auto-advance to the next episode
-- [ ] Captions advance by paragraph timings
-- [ ] Status line (generating, queue depth, offline-ok)
-- [ ] Works at phone width; no external requests (verify in browser dev tools, Network tab)
+> Status: confirmed working by the author (Oct 31). Code was tested in a real browser (Chromium via Playwright, 35 checks, fake mode). 5 new unit tests (43 in total) pass. The boxes below describe what the code does; tick "Your checks" once you have heard it on your own machine.
+
+- [x] Dial UI that snaps between the four stations (drag the needle, tap the dial, press a preset key, or use the arrow keys; each station has its own lamp colour)
+- [x] WebAudio static burst on tune, no audio files needed
+- [x] Audio player with auto-advance to the next episode (tuning is debounced 450 ms, because `next` marks an episode played when it is fetched)
+- [x] Captions advance by paragraph timings (station intro, then each paragraph as it is spoken)
+- [x] Status line (generating, queue depth, offline-ok) and a "No signal" state when a station is still empty
+- [x] Works at phone width (checked at 390 px, no sideways scroll); no external requests (checked: every request stays on the server)
+- [x] Power screen: browsers block sound until a click, so the page opens with "Turn the radio on"
+
+**Your checks (on your machine):**
+
+- [ ] `python -m unittest discover -v` shows 43 tests passing
+- [ ] `python -m app serve --fake`, open `http://localhost:8137` (VS Code forwards the port), click "Turn the radio on": a story plays with captions that follow the voice
+- [ ] Drag the needle, press each preset, use the left and right arrow keys: each tune gives a burst of static, then that station's story
+- [ ] Let one story finish: the next one starts by itself
+- [ ] `python -m app serve` (real): listen to a real episode through headphones; the ambience should sit under the voice, not over it
+- [ ] Open dev tools, Network tab, reload: every request is to `localhost`
+- [ ] Try it at a narrow window width or on your phone (use `--lan` only on a network you trust)
 
 **Gate:** open the page, tune stations, hear a full episode with captions.
 
-## Phase 4: Demo content and measurements (Saturday midday, ~2 h)
+**Not tested:** sound quality by ear, real (non-fake) stories in the page, touch dragging on a real phone, Safari and Firefox.
 
-- [ ] `scripts/pregenerate.py`: build 3 to 4 episodes per station
-- [ ] Curate: read every demo story, regenerate weak ones, keep a bad example and its fix for the post
-- [ ] Airplane-mode test: disable the network, restart, everything still works (screenshot)
-- [ ] Measure for the post: seconds per episode, peak RAM, disk used, cost ($0)
+## Phase 4: Demo content and measurements (Saturday midday, ~3 h)
+
+> Status: scripts written and run in fake mode. The real run is yours: it needs Ollama and takes about 1.5 min per episode, so 12 episodes is roughly 20 to 30 minutes.
+
+- [x] `scripts/pregenerate.py`: fills the cache to N unplayed episodes per station (default 3), resumable, rotates stations, writes `cache/measurements.json`
+- [x] `scripts/review.py`: writes every story to `cache/review.md` with automatic flags
+- [x] `scripts/offline_guard.py`: runs the radio while blocking and logging any non-local connection
+- [ ] Stop any running server, then `python scripts/pregenerate.py --per-station 4` (real models)
+- [ ] Curate: `python scripts/review.py`, open `cache/review.md`, read every story. Delete weak ones with `python -m app delete-episode <id-prefix>`, then run `pregenerate.py` again to refill. **Keep one bad output and its fix for the post** (copy the text before deleting)
+- [ ] Listen to at least one episode per station through headphones; tune `bed_level` in `stations.py` and `DUCK_DEPTH` in `mixer.py` if the ambience is too loud or too quiet, then remake that station's episodes
+- [ ] Airplane-mode test: `python -m app serve --no-worker`, turn Wi-Fi off, reload the page, play every station. Screenshot the OS network icon and the playing page
+- [ ] `python scripts/offline_guard.py --no-worker`, play a few stories, Ctrl+C: it should report 0 blocked
+- [ ] Measure for the post (all from `cache/measurements.json`): seconds per episode, lowest free RAM, cache size, cost $0. Also note `ollama ps` memory while a story is generating
+- [ ] `python -m app reset-played` so every station starts with fresh stories, then record the demo (see below)
 - [ ] Record a short demo video or GIF
+
+**Demo recording (about 60 seconds):** power on, let the 88.1 station ID and first paragraph play with captions visible, drag the needle across static to 107.9, press a preset to 101.3, show the airplane-mode icon in the corner. Record the screen and system audio with whatever you have (OBS, Windows Game Bar, or a phone filming the laptop).
 
 **Gate:** a stranger could watch the demo and understand it in 60 seconds.
 
@@ -243,6 +268,7 @@ These are measured on a short 67-token reply; confirm against a real story in th
 | Oct 30 | Schedule reset (see Revised schedule). Phase 5 packaging becomes optional |
 | Oct 30 | Worker keeps the model loaded (`keep_alive` 30m), runs one generation at a time at low priority, and refills the station being listened to first |
 | Oct 30 | `next` marks an episode played when served; when all are played it replays the least recently played one |
+| Oct 31 | Frontend: no framework, no CDN, system fonts only. A power screen opens first because browsers block sound until a click. Static between stations is synthesised in the browser (WebAudio), not a file. Captions follow `audio.currentTime` against the stored segment timings |
 
 ## Progress log
 
@@ -255,3 +281,5 @@ These are measured on a short 67-token reply; confirm against a real story in th
 | Oct 29 | Baseline recorded: `gemma3:4b` 9.2 tokens/sec, Piper about 13x realtime |
 | Oct 30 | Phase 1 confirmed working by the author |
 | Oct 30 | Phase 2 code written (store, worker, API, `serve` command) with 22 new tests; live server exercised over HTTP in fake mode; awaiting real-hardware run |
+| Oct 31 | Phase 3 code written: radio page (`static/index.html`, `style.css`, `app.js`) with dial, presets, static, captions, auto-advance, status line. Browser-tested 35/35 in fake mode; 5 new unit tests |
+| Oct 31 | Phase 4 scripts written (`pregenerate.py`, `review.py`, `offline_guard.py`) and run in fake mode; real generation, curation and recording are the author's |
